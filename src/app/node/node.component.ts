@@ -1,5 +1,6 @@
-import {Component, Input} from '@angular/core';
+import {Component, EventEmitter, Input, Output} from '@angular/core';
 import {DataContent, NodeData} from "./node-data";
+import {CdkDragDrop, moveItemInArray} from "@angular/cdk/drag-drop";
 
 @Component({
   selector: 'app-node',
@@ -9,25 +10,56 @@ import {DataContent, NodeData} from "./node-data";
 export class NodeComponent {
   showBorder = false;
   hideContent = false;
-  subNodes: NodeData[] = [];
 
   @Input()
-  data: NodeData | undefined;
+  nodeData!: NodeData;
 
   @Input()
-  isRoot: boolean = false
+  parentNode: NodeData | undefined;
+
+  @Output()
+  onDataChange = new EventEmitter<string>();
+
+  drop(event: CdkDragDrop<string[]>) {
+    moveItemInArray(this.nodeData.subNodes, event.previousIndex, event.currentIndex);
+    this.onDataChange.emit();
+  }
 
   onColumnDataSubmit(column: DataContent, event: string) {
     column.isEditing = false;
     column.text = event;
+    this.onDataChange.emit();
   }
 
   onAddContentClick() {
-    this.data?.leafColumns.push(new DataContent('Content ' + (this.data?.leafColumns.length + 1), false));
+    this.nodeData.content.push(new DataContent('', true));
+    this.onDataChange.emit();
+  }
+
+  onDeleteContentClick(column: DataContent) {
+    if (!confirm('Are you sure you want to delete this column?')) {
+      return;
+    }
+
+    if (this.nodeData.content.length == 1) {
+      this.onDeleteNodeClick();
+    } else {
+      this.nodeData.content.splice(this.nodeData.content.indexOf(column), 1);
+      this.onDataChange.emit();
+    }
   }
 
   onAddNodeClick(isLeaf: boolean) {
-    const name = (isLeaf ? 'Leaf ' : 'Node ') + (this.subNodes.length + 1);
-    this.subNodes.push(new NodeData(name, isLeaf));
+    this.nodeData.subNodes.push(new NodeData(isLeaf));
+    this.onDataChange.emit();
+  }
+
+  onDeleteNodeClick() {
+    if (!confirm('Are you sure you want to delete this branch?')) {
+      return;
+    }
+
+    this.parentNode?.subNodes.splice(this.parentNode?.subNodes.indexOf(this.nodeData), 1);
+    this.onDataChange.emit();
   }
 }

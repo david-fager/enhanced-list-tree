@@ -1,22 +1,22 @@
 export class NodeData {
-  title: DataContent;
   isLeaf: boolean;
-  leafColumns: DataContent[] = [];
+  content: DataContent[];
+  subNodes: NodeData[];
 
-  constructor(title: string, isLeaf: boolean) {
-    this.title = new DataContent(title, false);
+  constructor(isLeaf: boolean) {
     this.isLeaf = isLeaf;
-    this.leafColumns = [new DataContent(title, false)]
+    this.content = [new DataContent("Untitled", true)];
+    this.subNodes = [];
   }
 }
 
 export class DataContent {
+  showOptions = false;
   text: string;
-  showEdit = false;
   isEditing: boolean;
 
-  constructor(content: string, isEditing: boolean) {
-    this.text = content;
+  constructor(text: string, isEditing: boolean) {
+    this.text = text;
     this.isEditing = isEditing;
   }
 }

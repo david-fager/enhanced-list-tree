@@ -6,6 +6,7 @@ import { NodeComponent } from './node/node.component';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 import {FormsModule} from "@angular/forms";
 import {InputComponent} from "./input/input.component";
+import {DragDropModule} from "@angular/cdk/drag-drop";
 
 @NgModule({
   declarations: [
@@ -16,7 +17,8 @@ import {InputComponent} from "./input/input.component";
     imports: [
         BrowserModule,
         NgbModule,
-        FormsModule
+        FormsModule,
+        DragDropModule
     ],
   providers: [],
   bootstrap: [AppComponent]

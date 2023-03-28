@@ -1,32 +1,34 @@
 <div class="d-flex flex-row">
-  <div *ngIf="!isRoot" style="height: auto;">
+  <div *ngIf="parentNode" style="height: auto;">
     <div style="height: 28px; width: 25px; border-bottom: 2px solid;"></div>
   </div>
 
   <div class="d-flex flex-column"
        [style.width]="'100%'"
        [style.padding]="'10px 0 10px 5px'"
-       [class.border]="showBorder"
+       [class.border]="showBorder && nodeData.isLeaf"
        (mouseenter)="showBorder = true"
        (mouseleave)="showBorder = false">
 
 
       <!-- if the node is a leaf -->
-      <div *ngIf="data?.isLeaf" class="d-flex flex-row">
+      <div *ngIf="nodeData.isLeaf" class="d-flex flex-row">
 
-        <div *ngFor="let column of data?.leafColumns"
+        <div *ngFor="let column of nodeData.content"
              class="d-flex align-items-center"
-             [style.width]="'25%'"
+             [style.min-width]="'180px'"
              [style.min-height]="'32px'"
-             [style.padding-left]="'5px'">
+             [style.padding-left]="'5px'"
+             (mouseenter)="column.showOptions = true"
+             (mouseleave)="column.showOptions = false">
+             <!--[style.width]="'calc(20vw - (100vw - 100%))'"-->
 
           <div *ngIf="!column.isEditing"
-               class="d-flex flex-row align-items-center"
-               (mouseenter)="column.showEdit = true"
-               (mouseleave)="column.showEdit = false">
+               class="d-flex flex-row align-items-center">
 
             <span [style.padding-bottom]="'3px'" [style.padding-right]="'5px'">{{column.text}}</span>
-            <img *ngIf="column.showEdit" class="icon-24" src="assets/edit.png" (click)="column.isEditing = true">
+            <img *ngIf="column.showOptions" class="icon-24" src="assets/edit.png" (click)="column.isEditing = true">
+            <img *ngIf="column.showOptions" class="icon-24" src="assets/delete.png" (click)="onDeleteContentClick(column)">
           </div>
 
           <app-input *ngIf="column.isEditing"
@@ -36,15 +38,18 @@
         </div>
 
         <!-- shows leaf's new column button -->
-        <div *ngIf="data?.leafColumns?.length! < 5" class="d-flex" [style.width]="'25%'">
-          <img class="icon-32" src="assets/add-circle.png" (click)="onAddContentClick()">
+        <div *ngIf="nodeData.content.length! < 5" class="d-flex align-items-center" [style.width]="'25%'">
+          <img class="icon-24" src="assets/add.png" (click)="onAddContentClick()">
         </div>
       </div>
 
-      <!-- if the node branches -->
-      <div *ngIf="!data?.isLeaf" class="d-flex flex-column">
 
-        <div class="d-flex flex-row align-items-center"> <!-- (click)="hideContent = !hideContent"> -->
+      <!-- if the node branches -->
+      <div *ngIf="!nodeData.isLeaf" class="d-flex flex-column">
+
+        <div class="d-flex flex-row align-items-center"
+             (mouseenter)="nodeData.content[0].showOptions = true"
+             (mouseleave)="nodeData.content[0].showOptions = false"> <!-- (click)="hideContent = !hideContent"> -->
 
           <div [style.padding-right]="'5px'">
             <img *ngIf="hideContent" class="icon-32"
@@ -58,20 +63,21 @@
 
           <div [style.min-height]="'32px'">
 
-            <div *ngIf="!data!.title!.isEditing"
-                 class="d-flex flex-row align-items-center"
-                 (mouseenter)="data!.title!.showEdit = true"
-                 (mouseleave)="data!.title!.showEdit = false">
+            <div *ngIf="!nodeData.content[0].isEditing"
+                 class="d-flex flex-row align-items-center">
 
-              <span [style.padding-bottom]="'3px'" [style.padding-right]="'5px'">{{data!.title!.text}}</span>
-              <img *ngIf="data!.title!.showEdit"
+              <span [style.padding-bottom]="'3px'" [style.padding-right]="'5px'">{{nodeData.content[0].text}}</span>
+              <img *ngIf="nodeData.content[0].showOptions"
                    class="icon-24" src="assets/edit.png"
-                   (click)="data!.title!.isEditing = true">
+                   (click)="nodeData.content[0].isEditing = true">
+              <img *ngIf="nodeData.content[0].showOptions && parentNode"
+                   class="icon-24" src="assets/delete.png"
+                   (click)="onDeleteNodeClick()">
             </div>
 
-            <app-input *ngIf="data!.title!.isEditing"
-                       [value]="data!.title!.text"
-                       (onSubmit)="onColumnDataSubmit(data!.title!, $event)">
+            <app-input *ngIf="nodeData.content[0].isEditing"
+                       [value]="nodeData.content[0].text"
+                       (onSubmit)="onColumnDataSubmit(nodeData.content[0], $event)">
             </app-input>
           </div>
 
@@ -80,22 +86,27 @@
       <div class="d-flex flex-row" [style.padding-left]="'15px'">
         <div style="height: auto; border-left: 2px solid;"></div>
 
-        <div *ngIf="!hideContent" [style.width]="'100%'">
-          <app-node *ngFor="let node of subNodes" [data]="node"></app-node>
+        <div cdkDropList *ngIf="!hideContent" [style.width]="'100%'" (cdkDropListDropped)="drop($event)">
+          <app-node cdkDrag
+                    *ngFor="let node of nodeData.subNodes"
+                    [nodeData]="node"
+                    [parentNode]="nodeData"
+                    (onDataChange)="onDataChange.emit()">
+          </app-node>
         </div>
       </div>
     </div>
 
     <!-- shows the new node buttons -->
-    <div *ngIf="!data?.isLeaf && !hideContent" class="d-flex flex-row" [style.padding-left]="'15px'">
+    <div *ngIf="!nodeData.isLeaf && !hideContent" class="d-flex flex-row" [style.padding-left]="'15px'">
       <div class="d-flex flex-column" [style.height]="'auto'" [style.width]="'20px'">
         <div style="height: 50%; border-left: 2px solid;"></div>
         <div style="height: calc(50% + 1px); border-top: 2px solid;"></div>
       </div>
 
       <div class="d-flex flex-row" [style.padding-left]="'5px'">
-        <img class="icon-32" src="assets/add-circle.png" (click)="onAddNodeClick(true)">
-        <img class="icon-32" src="assets/add-circle.png" (click)="onAddNodeClick(false)">
+        <img class="icon-24" src="assets/add.png" (click)="onAddNodeClick(true)">
+        <img class="icon-24" src="assets/add.png" (click)="onAddNodeClick(false)">
       </div>
     </div>
 
