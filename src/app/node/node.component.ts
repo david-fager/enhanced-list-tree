@@ -1,5 +1,5 @@
 import {Component, Input} from '@angular/core';
-import {NodeData} from "./node-data";
+import {DataContent, NodeData} from "./node-data";
 
 @Component({
   selector: 'app-node',
@@ -17,8 +17,13 @@ export class NodeComponent {
   @Input()
   isRoot: boolean = false
 
+  onColumnDataSubmit(column: DataContent, event: string) {
+    column.isEditing = false;
+    column.text = event;
+  }
+
   onAddContentClick() {
-    this.data?.leafColumns.push(('Content ' + (this.data?.leafColumns.length + 1)));
+    this.data?.leafColumns.push(new DataContent('Content ' + (this.data?.leafColumns.length + 1), false));
   }
 
   onAddNodeClick(isLeaf: boolean) {

@@ -1,4 +1,20 @@
 /* You can add global styles to this file, and also import other style files */
+.icon-24 {
+  width: 24px;
+  padding: 4px;
+}
+
+.icon-24:hover {
+  cursor: pointer;
+  background-color: rgba(65, 65, 255, 0.3);
+  border-radius: 25px;
+}
+
+.icon-24:active {
+  padding: 5px;
+}
+
+
 .icon-32 {
   width: 32px;
   padding: 4px;
