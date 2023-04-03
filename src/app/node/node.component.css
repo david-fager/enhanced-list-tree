@@ -1,0 +1,15 @@
+.cdk-drag-placeholder {
+  display: none;
+}
+
+.cdk-drag-preview {
+  background: #fff;
+  opacity: 0.5;
+}
+
+.drop-line {
+  margin-left: -20px;
+  width: 30px;
+  margin-right: auto;
+  height: 2px;
+}

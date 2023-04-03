@@ -1,3 +1,3 @@
-<form (submit)="onSubmit.emit(value)">
-  <input #field [(ngModel)]="value" name="value" (focusout)="onSubmit.emit(value)">
+<form (submit)="onCloseInput(false)">
+  <input #field type="text" name="text" [(ngModel)]="text" (focusout)="onCloseInput(true)">
 </form>

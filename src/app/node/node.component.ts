@@ -1,6 +1,10 @@
-import {Component, EventEmitter, Input, Output} from '@angular/core';
-import {DataContent, NodeData} from "./node-data";
-import {CdkDragDrop, moveItemInArray} from "@angular/cdk/drag-drop";
+import {Component, Inject} from "@angular/core";
+import {DOCUMENT} from "@angular/common";
+import {CdkDragDrop, CdkDragMove} from "@angular/cdk/drag-drop";
+import * as uuid from 'uuid';
+import {DataContent, DataNode} from "../data/data-node";
+import {DataDrop, Placement} from "../data/data-drop";
+import {dataDefault} from "../data/data-default";
 
 @Component({
   selector: 'app-node',
@@ -8,58 +12,117 @@ import {CdkDragDrop, moveItemInArray} from "@angular/cdk/drag-drop";
   styleUrls: ['./node.component.css']
 })
 export class NodeComponent {
-  showBorder = false;
-  hideContent = false;
+  rootID = "root";
+  nodes: DataNode[] = [];
+  nodeLookup: Map<string, DataNode> = new Map();
+  dropData: DataDrop = new DataDrop("");
 
-  @Input()
-  nodeData!: NodeData;
+  constructor(@Inject(DOCUMENT) private document: Document) {
+    // find & load data or use default template
+    const local = localStorage.getItem("key");
+    this.nodes = local ? JSON.parse(local!) : dataDefault;
+    if (!local) this.saveChanges();
 
-  @Input()
-  parentNode: NodeData | undefined;
-
-  @Output()
-  onDataChange = new EventEmitter<string>();
-
-  drop(event: CdkDragDrop<string[]>) {
-    moveItemInArray(this.nodeData.subNodes, event.previousIndex, event.currentIndex);
-    this.onDataChange.emit();
+    // ready the data
+    const root = new DataNode("", this.nodes);
+    this.nodeLookup = new Map([[this.rootID, root], ...this.populateNodeLookup(this.nodes!)]);
+    this.dropData = new DataDrop("");
   }
 
-  onColumnDataSubmit(column: DataContent, event: string) {
-    column.isEditing = false;
-    column.text = event;
-    this.onDataChange.emit();
+  saveChanges() {
+    localStorage.setItem("key", JSON.stringify(this.nodes));
   }
 
-  onAddContentClick() {
-    this.nodeData.content.push(new DataContent('', true));
-    this.onDataChange.emit();
+  populateNodeLookup(nodes: DataNode[]): [string, DataNode][] {
+    return nodes.flatMap(n => [[n.id, n], ...this.populateNodeLookup(n.children)]);
   }
 
-  onDeleteContentClick(column: DataContent) {
-    if (!confirm('Are you sure you want to delete this column?')) {
-      return;
+  dragMoved(event: CdkDragMove<string>) {
+    this.dropData = new DataDrop("", Placement.None);
+    const xPos = event.pointerPosition.x, yPos = event.pointerPosition.y;
+
+    let element = this.document.elementFromPoint(xPos, yPos);
+    if (!element?.classList.contains("node-item")) element = element?.closest(".node-item") ?? null;
+    if (!element) return;
+
+    const dropID = element.getAttribute("data-id")!
+    const dropRect = element.getBoundingClientRect();
+
+    this.dropData = new DataDrop(dropID, Placement.Merge);
+    if (yPos < dropRect.top + dropRect.height / 3) this.dropData.placement = Placement.Over;
+    if (yPos > dropRect.bottom - dropRect.height / 3) this.dropData.placement = Placement.Under;
+
+    this.purgeHighlightClasses();
+    const derp = this.document.getElementById(dropID + '-' + Placement[this.dropData.placement]);
+    derp?.style.setProperty("border-bottom", "2px solid");
+  }
+
+  drop(event: CdkDragDrop<DataNode[]>, drop: DataDrop) {
+    this.dropData = new DataDrop("", Placement.None);
+    if (drop?.placement === Placement.None) return;
+
+    // what do we move
+    const movedItem = this.nodeLookup.get(event.item.data)!;
+
+    // from where do we remove it
+    const prevListID = event.previousContainer.id;
+    const prevList = this.nodeLookup.get(prevListID)!.children;
+    const prevListIndex = prevList.findIndex(n => n.id === movedItem.id);
+    prevList.splice(prevListIndex, 1);
+
+    // to where did we move it
+    const dropListID = this.searchTreeForParent(this.nodes, drop.id)!;
+    const dropList = this.nodeLookup.get(dropListID)!.children;
+    const dropListIndex = dropList.findIndex(n => n.id === drop.id);
+
+    // perform move
+    if (drop.placement === Placement.Over) dropList.splice(dropListIndex, 0, movedItem);
+    else if (drop.placement === Placement.Under) dropList.splice(dropListIndex + 1, 0, movedItem);
+    else if (drop.placement === Placement.Merge) this.nodeLookup.get(drop.id)!.children.push(movedItem);
+
+    this.purgeHighlightClasses();
+    this.saveChanges();
+  }
+
+  searchTreeForParent(nodeTree: DataNode[], searchID: string, parentId: string | null = null): string | null {
+    for (const node of nodeTree) {
+      if (node.id === searchID) return parentId ?? this.rootID;
+      const childResult = this.searchTreeForParent(node.children, searchID, node.id);
+      if (childResult) return childResult;
     }
+    return parentId === null ? this.rootID : null;
+  }
 
-    if (this.nodeData.content.length == 1) {
-      this.onDeleteNodeClick();
-    } else {
-      this.nodeData.content.splice(this.nodeData.content.indexOf(column), 1);
-      this.onDataChange.emit();
+  purgeHighlightClasses() {
+    const elements = this.document.querySelectorAll(".drop-line");
+    elements.forEach(e => (e as any).style.removeProperty("border-bottom"));
+  }
+
+  onAddContent(node: DataNode) {
+    node.content.push(new DataContent(''));
+  }
+
+  onSaveContent(node: DataNode, isNodeEmpty: boolean) {
+    if (isNodeEmpty) {
+      const parentID = this.searchTreeForParent(this.nodes, node.id)!;
+      const parentsChildren = this.nodeLookup.get(parentID)!.children;
+      parentsChildren.splice(parentsChildren.findIndex(c => c === node), 1);
     }
+    this.saveChanges();
   }
 
-  onAddNodeClick(isLeaf: boolean) {
-    this.nodeData.subNodes.push(new NodeData(isLeaf));
-    this.onDataChange.emit();
+  onAddNode(node: DataNode) {
+    node.children.push(new DataNode(uuid.v4()))
   }
 
-  onDeleteNodeClick() {
+  onDeleteNode(node: DataNode) {
     if (!confirm('Are you sure you want to delete this branch?')) {
       return;
     }
 
-    this.parentNode?.subNodes.splice(this.parentNode?.subNodes.indexOf(this.nodeData), 1);
-    this.onDataChange.emit();
+    const parentID = this.searchTreeForParent(this.nodes, node.id)!;
+    const parentsChildren = this.nodeLookup.get(parentID)!.children;
+    parentsChildren.splice(parentsChildren.findIndex(c => c === node), 1);
+    this.saveChanges();
   }
 }

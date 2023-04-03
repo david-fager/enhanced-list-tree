@@ -1,114 +1,67 @@
-<div class="d-flex flex-row">
-  <div *ngIf="parentNode" style="height: auto;">
-    <div style="height: 28px; width: 25px; border-bottom: 2px solid;"></div>
-  </div>
+<!-- initial nodes -->
+<div cdkDropList [id]="rootID" [cdkDropListData]="nodes"
+     (cdkDropListDropped)="drop($event, dropData)" [cdkDropListSortingDisabled]="true">
 
-  <div class="d-flex flex-column"
-       [style.width]="'100%'"
-       [style.padding]="'10px 0 10px 5px'"
-       [class.border]="showBorder && nodeData.isLeaf"
-       (mouseenter)="showBorder = true"
-       (mouseleave)="showBorder = false">
-
-
-      <!-- if the node is a leaf -->
-      <div *ngIf="nodeData.isLeaf" class="d-flex flex-row">
-
-        <div *ngFor="let column of nodeData.content"
-             class="d-flex align-items-center"
-             [style.min-width]="'180px'"
-             [style.min-height]="'32px'"
-             [style.padding-left]="'5px'"
-             (mouseenter)="column.showOptions = true"
-             (mouseleave)="column.showOptions = false">
-             <!--[style.width]="'calc(20vw - (100vw - 100%))'"-->
-
-          <div *ngIf="!column.isEditing"
-               class="d-flex flex-row align-items-center">
-
-            <span [style.padding-bottom]="'3px'" [style.padding-right]="'5px'">{{column.text}}</span>
-            <img *ngIf="column.showOptions" class="icon-24" src="assets/edit.png" (click)="column.isEditing = true">
-            <img *ngIf="column.showOptions" class="icon-24" src="assets/delete.png" (click)="onDeleteContentClick(column)">
-          </div>
-
-          <app-input *ngIf="column.isEditing"
-                     [value]="column.text"
-                     (onSubmit)="onColumnDataSubmit(column, $event)">
-          </app-input>
-        </div>
-
-        <!-- shows leaf's new column button -->
-        <div *ngIf="nodeData.content.length! < 5" class="d-flex align-items-center" [style.width]="'25%'">
-          <img class="icon-24" src="assets/add.png" (click)="onAddContentClick()">
-        </div>
-      </div>
-
-
-      <!-- if the node branches -->
-      <div *ngIf="!nodeData.isLeaf" class="d-flex flex-column">
-
-        <div class="d-flex flex-row align-items-center"
-             (mouseenter)="nodeData.content[0].showOptions = true"
-             (mouseleave)="nodeData.content[0].showOptions = false"> <!-- (click)="hideContent = !hideContent"> -->
-
-          <div [style.padding-right]="'5px'">
-            <img *ngIf="hideContent" class="icon-32"
-                 src="assets/up-less.png"
-                 (click)="hideContent = !hideContent">
-
-            <img *ngIf="!hideContent" class="icon-32"
-                 src="assets/down-more.png"
-                 (click)="hideContent = !hideContent">
-          </div>
-
-          <div [style.min-height]="'32px'">
-
-            <div *ngIf="!nodeData.content[0].isEditing"
-                 class="d-flex flex-row align-items-center">
-
-              <span [style.padding-bottom]="'3px'" [style.padding-right]="'5px'">{{nodeData.content[0].text}}</span>
-              <img *ngIf="nodeData.content[0].showOptions"
-                   class="icon-24" src="assets/edit.png"
-                   (click)="nodeData.content[0].isEditing = true">
-              <img *ngIf="nodeData.content[0].showOptions && parentNode"
-                   class="icon-24" src="assets/delete.png"
-                   (click)="onDeleteNodeClick()">
-            </div>
-
-            <app-input *ngIf="nodeData.content[0].isEditing"
-                       [value]="nodeData.content[0].text"
-                       (onSubmit)="onColumnDataSubmit(nodeData.content[0], $event)">
-            </app-input>
-          </div>
-
-        </div>
-
-      <div class="d-flex flex-row" [style.padding-left]="'15px'">
-        <div style="height: auto; border-left: 2px solid;"></div>
-
-        <div cdkDropList *ngIf="!hideContent" [style.width]="'100%'" (cdkDropListDropped)="drop($event)">
-          <app-node cdkDrag
-                    *ngFor="let node of nodeData.subNodes"
-                    [nodeData]="node"
-                    [parentNode]="nodeData"
-                    (onDataChange)="onDataChange.emit()">
-          </app-node>
-        </div>
-      </div>
-    </div>
-
-    <!-- shows the new node buttons -->
-    <div *ngIf="!nodeData.isLeaf && !hideContent" class="d-flex flex-row" [style.padding-left]="'15px'">
-      <div class="d-flex flex-column" [style.height]="'auto'" [style.width]="'20px'">
-        <div style="height: 50%; border-left: 2px solid;"></div>
-        <div style="height: calc(50% + 1px); border-top: 2px solid;"></div>
-      </div>
-
-      <div class="d-flex flex-row" [style.padding-left]="'5px'">
-        <img class="icon-24" src="assets/add.png" (click)="onAddNodeClick(true)">
-        <img class="icon-24" src="assets/add.png" (click)="onAddNodeClick(false)">
-      </div>
-    </div>
-
+  <div cdkDrag *ngFor="let node of nodes" [cdkDragData]="node.id" (cdkDragMoved)="dragMoved($event)">
+    <ng-container *ngTemplateOutlet="nodeTemp; context:{node:node}"></ng-container>
   </div>
 </div>
+
+
+<!-- template for all nodes -->
+<ng-template #nodeTemp let-node="node">
+  <div class="node-item w-100" [attr.data-id]="node.id" [attr.id]="'node-' + node.id">
+    <div [attr.id]="node.id + '-Over'" class="drop-line"></div>
+
+
+    <!-- content of the node -->
+    <div class="d-flex flex-row align-items-center" [style.min-height]="'48px'" [style.padding-left]="'5px'">
+      <div *ngIf="node.children.length" [style.padding-right]="'5px'">
+        <img *ngIf="!node.isExpanded" class="icon-32" src="assets/up-less.png" (click)="node.isExpanded = !node.isExpanded">
+        <img *ngIf="node.isExpanded" class="icon-32" src="assets/down-more.png" (click)="node.isExpanded = !node.isExpanded">
+      </div>
+
+      <div *ngFor="let content of node.content; let first = first" class="d-flex flex-row align-items-center" [style.min-width]="'180px'" [style.padding-left]="'5px'">
+        <span *ngIf="!$any(content).isEditing" [style.padding-bottom]="'3px'" [style.padding-right]="'5px'" (click)="$any(content).isEditing = true">{{$any(content).text}}</span>
+        <img *ngIf="!$any(content).isEditing && first" class="icon-24" src="assets/delete.png" (click)="onDeleteNode(node)">
+
+        <app-input *ngIf="$any(content).isEditing" [node]="node" [content]="$any(content)" (onSave)="onSaveContent(node, $event)"></app-input>
+      </div>
+
+      <img *ngIf="node.content.length < 5" class="icon-24" src="assets/add.png" (click)="onAddContent(node)">
+    </div>
+
+
+
+    <!-- row: left is relationship lines and right is node + its children -->
+    <div class="d-flex flex-row" *ngIf="node.isExpanded && node.children.length">
+      <div [style.margin-top]="'-5px'" [style.margin-bottom]="'15px'"
+           [style.padding-left]="'18px'" [style.border-right]="'2px solid'">
+      </div>
+
+      <!-- all children nodes -->
+      <div cdkDropList class="w-100" [id]="node.id" [cdkDropListData]="node.children"
+           (cdkDropListDropped)="drop($event, dropData)" [cdkDropListSortingDisabled]="true">
+
+        <!-- each child node -->
+        <div cdkDrag *ngFor="let child of node.children" [cdkDragData]="child.id" (cdkDragMoved)="dragMoved($event)">
+          <div class="d-flex flex-row">
+            <div style="width: 20px; height: 26px; border-bottom: 2px solid;"></div>
+
+            <ng-container *ngTemplateOutlet="nodeTemp; context:{node:child}"></ng-container>
+          </div>
+        </div>
+
+        <!-- add buttons at end of branch -->
+        <div class="d-flex flex-row" [style.min-height]="'32px'">
+          <div style="width: 10px; height: 17px; border-bottom: 2px solid;"></div>
+          <img class="icon-24 align-self-center" src="assets/add.png" [style.margin-left]="'5px'" (click)="onAddNode(node)">
+        </div>
+
+      </div>
+    </div>
+
+
+    <div [attr.id]="node.id + '-Under'" class="drop-line"></div>
+  </div>
+</ng-template>

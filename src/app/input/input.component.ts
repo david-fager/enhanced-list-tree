@@ -1,4 +1,5 @@
 import {Component, ElementRef, EventEmitter, Input, Output, ViewChild} from '@angular/core';
+import {DataContent, DataNode} from "../data/data-node";
 
 @Component({
   selector: 'app-input',
@@ -7,15 +8,40 @@ import {Component, ElementRef, EventEmitter, Input, Output, ViewChild} from '@an
 })
 export class InputComponent {
 
+  text!: string;
+
   @Input()
-  value: string | undefined;
+  node!: DataNode;
+
+  @Input()
+  content!: DataContent;
 
   @Output()
-  onSubmit = new EventEmitter<string>();
+  onSave = new EventEmitter<boolean>();
 
-  @ViewChild('field') field: ElementRef | undefined;
+  @ViewChild('field') field!: ElementRef;
 
-  ngAfterViewInit() {
-    this.field?.nativeElement.focus();
+  ngOnInit() {
+    this.text = this.content.text;
+  }
+
+  async ngAfterViewInit() {
+    this.field.nativeElement.focus();
+    setTimeout(() => this.field.nativeElement.select(), 1);
+  }
+
+  onCloseInput(cancelled: boolean) {
+    this.content!.isEditing = false;
+
+    if (!cancelled) {
+      this.content.text = this.text;
+      if (!this.content.text) cancelled = true;
+      else this.onSave.emit();
+    }
+
+    if (cancelled && !this.content.text) {
+      this.node.content.splice(this.node.content.findIndex(c => c === this.content), 1);
+      this.onSave.emit(this.node.content.length === 0);
+    }
   }
 }
