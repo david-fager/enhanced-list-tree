@@ -1,6 +1,6 @@
-import {DataNode} from "./data-node";
+import {NodeData} from "./node-data";
 
-export var dataDefault: DataNode[] = [
+export var defaultData: NodeData[] = [
   {
     id: "default-root",
     isExpanded: true,

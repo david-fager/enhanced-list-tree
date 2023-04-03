@@ -1,9 +1,11 @@
 .cdk-drag-placeholder {
-  display: none;
+  border: rgba(0, 0, 0, 0.1) 1px solid;
+  opacity: 0.7;
 }
 
 .cdk-drag-preview {
-  background: #fff;
+  background: rgba(0, 0, 0, 0.1);
+  border: rgba(0, 0, 0, 0.3) 1px solid;
   opacity: 0.5;
 }
 
@@ -12,4 +14,9 @@
   width: 30px;
   margin-right: auto;
   height: 2px;
+}
+
+.selected {
+  border: rgba(70, 0, 155, 0.1) 1px solid;
+  background: rgba(70, 0, 155, 0.1);
 }

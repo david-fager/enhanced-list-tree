@@ -1,10 +1,10 @@
-export class DataNode {
+export class NodeData {
   id: string;
   isExpanded = true;
   content: DataContent[];
-  children: DataNode[];
+  children: NodeData[];
 
-  constructor(id: string, children: DataNode[] = []) {
+  constructor(id: string, children: NodeData[] = []) {
     this.id = id;
     this.content = [new DataContent("", true)];
     this.children = children;

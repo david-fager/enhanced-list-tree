@@ -9,13 +9,15 @@
 
 
 <!-- template for all nodes -->
-<ng-template #nodeTemp let-node="node">
-  <div class="node-item w-100" [attr.data-id]="node.id" [attr.id]="'node-' + node.id">
+<ng-template #nodeTemp let-node="node" let-itemClass>
+  <div class="w-100" [ngClass]="itemClass" [attr.data-id]="node.id" [attr.id]="'node-' + node.id">
     <div [attr.id]="node.id + '-Over'" class="drop-line"></div>
 
 
     <!-- content of the node -->
-    <div class="d-flex flex-row align-items-center" [style.min-height]="'48px'" [style.padding-left]="'5px'">
+    <div [attr.id]="'content-' + node.id" class="d-flex flex-row align-items-center" [style.min-height]="'48px'"
+         [style.padding-left]="'5px'" (click)="onNodeSelection(node)">
+
       <div *ngIf="node.children.length" [style.padding-right]="'5px'">
         <img *ngIf="!node.isExpanded" class="icon-32" src="assets/up-less.png" (click)="node.isExpanded = !node.isExpanded">
         <img *ngIf="node.isExpanded" class="icon-32" src="assets/down-more.png" (click)="node.isExpanded = !node.isExpanded">
@@ -45,10 +47,11 @@
 
         <!-- each child node -->
         <div cdkDrag *ngFor="let child of node.children" [cdkDragData]="child.id" (cdkDragMoved)="dragMoved($event)">
-          <div class="d-flex flex-row">
-            <div style="width: 20px; height: 26px; border-bottom: 2px solid;"></div>
 
-            <ng-container *ngTemplateOutlet="nodeTemp; context:{node:child}"></ng-container>
+          <div class="d-flex flex-row">
+            <div style="width: 20px; height: 27px; border-bottom: 2px solid;"></div>
+
+            <ng-container *ngTemplateOutlet="nodeTemp; context:{node:child, $implicit:'node-item'}"></ng-container>
           </div>
         </div>
 

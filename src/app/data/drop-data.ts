@@ -1,4 +1,4 @@
-export class DataDrop {
+export class DropData {
   id: string;
   placement: Placement;
 

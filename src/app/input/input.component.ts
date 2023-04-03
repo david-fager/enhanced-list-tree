@@ -1,5 +1,5 @@
 import {Component, ElementRef, EventEmitter, Input, Output, ViewChild} from '@angular/core';
-import {DataContent, DataNode} from "../data/data-node";
+import {DataContent, NodeData} from "../data/node-data";
 
 @Component({
   selector: 'app-input',
@@ -11,7 +11,7 @@ export class InputComponent {
   text!: string;
 
   @Input()
-  node!: DataNode;
+  node!: NodeData;
 
   @Input()
   content!: DataContent;
