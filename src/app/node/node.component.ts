@@ -5,6 +5,7 @@ import * as uuid from 'uuid';
 import {DataContent, NodeData} from "../data/node-data";
 import {DropData, Placement} from "../data/drop-data";
 import {defaultData} from "../data/default-data";
+import {debounceTime, Subject, Subscription} from "rxjs";
 
 @Component({
   selector: 'app-node',
@@ -17,25 +18,30 @@ export class NodeComponent {
   nodeLookup: Map<string, NodeData> = new Map();
   dropData: DropData = new DropData("");
 
-  selectionList: { element: HTMLElement, node: NodeData }[] = [];
-  selectedNode?: { element: HTMLElement, node: NodeData };
+  moveItemSubject = new Subject<CdkDragMove<string>>();
+  subscription?: Subscription;
+
+  orderedNodeIDs: string[] = [];
+  selectedID?: string;
 
   @HostListener('document:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
     console.log(event.key);
-    if (event.key === "ArrowUp") this.onNodeSelection(this.selectedNode?.node, -1);
-    if (event.key === "ArrowDown") this.onNodeSelection(this.selectedNode?.node, +1);
+    if (event.key === "ArrowUp") this.onNodeSelection(this.selectedID, -1);
+    if (event.key === "ArrowDown") this.onNodeSelection(this.selectedID, +1);
   }
 
   constructor(@Inject(DOCUMENT) private document: Document) {
     this.load();
   }
 
-  ngAfterViewInit() {
-    this.nodeLookup.forEach(n => this.selectionList.push({
-      element: this.document.getElementById('content-' + n.id)!,
-      node: n,
-    }));
+  ngOnInit() {
+    this.moveItemSubject.pipe(debounceTime(10))
+      .subscribe((value: CdkDragMove<string>) => this.dragMoved(value));
+  }
+
+  ngOnDestory() {
+    this.subscription?.unsubscribe();
   }
 
   load() {
@@ -45,9 +51,18 @@ export class NodeComponent {
     if (!local) this.saveChanges();
 
     // ready the data
+    // const lookup = this.populateNodeLookup(this.nodes!);
+    this.orderedNodeIDs = [];
     const root = new NodeData("", this.nodes);
     this.nodeLookup = new Map([[this.rootID, root], ...this.populateNodeLookup(this.nodes!)]);
+    // console.log(this.orderedNodeIDs);
+    // this.orderedNodeIDs = [ ...lookup.values() ].map(value => value[0]);
+
     this.dropData = new DropData("");
+
+    const reselect = this.selectedID;
+    this.selectedID = undefined;
+    this.onNodeSelection(reselect);
   }
 
   saveChanges() {
@@ -55,8 +70,11 @@ export class NodeComponent {
     this.load();
   }
 
-  populateNodeLookup(nodes: NodeData[]): [string, NodeData][] {
-    return nodes.flatMap(n => [[n.id, n], ...this.populateNodeLookup(n.children)]);
+  populateNodeLookup(nodes: NodeData[], isExpanded = true): [string, NodeData][] {
+    return nodes.flatMap(n => {
+      if (isExpanded) this.orderedNodeIDs.push(n.id);
+      return [[n.id, n], ...this.populateNodeLookup(n.children, n.isExpanded)];
+    });
   }
 
   dragMoved(event: CdkDragMove<string>) {
@@ -74,13 +92,14 @@ export class NodeComponent {
     if (yPos < dropRect.top + dropRect.height / 3) this.dropData.placement = Placement.Over;
     if (yPos > dropRect.bottom - dropRect.height / 3) this.dropData.placement = Placement.Under;
 
-    this.purgeHighlightClasses();
+    this.clearDropLines();
     const derp = this.document.getElementById(dropID + '-' + Placement[this.dropData.placement]);
-    derp?.style.setProperty("border-bottom", "2px solid");
+    derp?.style.setProperty("display", "flex");
   }
 
   drop(event: CdkDragDrop<NodeData[]>, drop: DropData) {
-    this.purgeHighlightClasses();
+    this.onNodeSelection(this.selectedID);
+    this.clearDropLines();
 
     this.dropData = new DropData("", Placement.None);
     if (drop?.placement === Placement.None) return;
@@ -116,9 +135,14 @@ export class NodeComponent {
     return parentId === null ? this.rootID : null;
   }
 
-  purgeHighlightClasses() {
-    const elements = this.document.querySelectorAll(".drop-line");
-    elements.forEach(e => (e as any).style.removeProperty("border-bottom"));
+  clearDropLines() {
+    const elements = this.document.querySelectorAll(".placement");
+    elements.forEach(e => (e as any).style.setProperty("display", "none"));
+  }
+
+  onChangeExpanded(node: NodeData) {
+    node.isExpanded = !node.isExpanded;
+    this.saveChanges();
   }
 
   onAddContent(node: NodeData) {
@@ -149,18 +173,26 @@ export class NodeComponent {
     this.saveChanges();
   }
 
-  onNodeSelection(node?: NodeData, mod: number = 0) {
-    if (this.selectedNode?.node === node && !mod) {
-      this.selectedNode?.element.classList.remove("selected");
-      this.selectedNode = undefined;
-    } else {
-      if (!node) return;
-      const selected = this.selectionList[this.selectionList.findIndex(s => s.node === node) + mod];
-      if (selected && selected.element) {
-        this.selectedNode?.element.classList.remove("selected");
-        this.selectedNode = selected;
-        this.selectedNode.element.classList.add("selected");
-      }
+  onNodeSelection(nodeID?: string, mod: number = 0, event?: MouseEvent) {
+    if (event && (event?.target as Element).tagName === "IMG") return;
+
+    let nodeIndex = -1;
+    if (nodeID) {
+      nodeIndex = this.orderedNodeIDs.findIndex(nid => nid === nodeID) + mod;
+      if (nodeIndex < 0 || nodeIndex > this.orderedNodeIDs.length - 1) return;
     }
+
+    const oldElement = this.document.getElementById('content-' + this.selectedID);
+    if (oldElement) oldElement.classList.remove("selected");
+
+    if (!this.selectedID || this.selectedID !== nodeID || mod) {
+      const selectedID = this.orderedNodeIDs[nodeIndex];
+      const selectedElement = this.document.getElementById('content-' + selectedID);
+
+      if (selectedElement) {
+        selectedElement.classList.add("selected");
+        this.selectedID = selectedID;
+      }
+    } else this.selectedID = undefined;
   }
 }

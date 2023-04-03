@@ -9,11 +9,15 @@
   opacity: 0.5;
 }
 
+.placement{
+  display: none;
+}
 .drop-line {
   margin-left: -20px;
   width: 30px;
   margin-right: auto;
   height: 2px;
+  border-bottom: 2px solid;
 }
 
 .selected {

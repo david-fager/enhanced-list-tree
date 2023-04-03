@@ -2,7 +2,7 @@
 <div cdkDropList [id]="rootID" [cdkDropListData]="nodes"
      (cdkDropListDropped)="drop($event, dropData)" [cdkDropListSortingDisabled]="true">
 
-  <div cdkDrag *ngFor="let node of nodes" [cdkDragData]="node.id" (cdkDragMoved)="dragMoved($event)">
+  <div cdkDrag *ngFor="let node of nodes" [cdkDragData]="node.id" (cdkDragMoved)="this.moveItemSubject.next($event)">
     <ng-container *ngTemplateOutlet="nodeTemp; context:{node:node}"></ng-container>
   </div>
 </div>
@@ -11,16 +11,25 @@
 <!-- template for all nodes -->
 <ng-template #nodeTemp let-node="node" let-itemClass>
   <div class="w-100" [ngClass]="itemClass" [attr.data-id]="node.id" [attr.id]="'node-' + node.id">
-    <div [attr.id]="node.id + '-Over'" class="drop-line"></div>
+    <div [attr.id]="node.id + '-Over'" class="placement drop-line"></div>
 
 
     <!-- content of the node -->
     <div [attr.id]="'content-' + node.id" class="d-flex flex-row align-items-center" [style.min-height]="'48px'"
-         [style.padding-left]="'5px'" (click)="onNodeSelection(node)">
+         [style.padding-left]="'5px'" (click)="onNodeSelection(node.id, 0, $event)">
+
+      <!-- along with '-Over' and '-Under', this shows where a moved item might be placed -->
+      <div *ngIf="!node.children.length" [attr.id]="node.id + '-Merge'" class="placement flex-column">
+        <img src="assets/down-more.png" style="width: 24px; height: 24px; margin-top: 8px;">
+        <div class="d-flex flex-row">
+          <div style="width: 12px; height: 8px; border-right: 2px solid"></div>
+          <div style="width: 6px; height: 8px; border-bottom: 2px solid"></div>
+        </div>
+      </div>
 
       <div *ngIf="node.children.length" [style.padding-right]="'5px'">
-        <img *ngIf="!node.isExpanded" class="icon-32" src="assets/up-less.png" (click)="node.isExpanded = !node.isExpanded">
-        <img *ngIf="node.isExpanded" class="icon-32" src="assets/down-more.png" (click)="node.isExpanded = !node.isExpanded">
+        <img *ngIf="!node.isExpanded" class="icon-32" src="assets/up-less.png" (click)="onChangeExpanded(node)">
+        <img *ngIf="node.isExpanded" class="icon-32" src="assets/down-more.png" (click)="onChangeExpanded(node)">
       </div>
 
       <div *ngFor="let content of node.content; let first = first" class="d-flex flex-row align-items-center" [style.min-width]="'180px'" [style.padding-left]="'5px'">
@@ -46,7 +55,7 @@
            (cdkDropListDropped)="drop($event, dropData)" [cdkDropListSortingDisabled]="true">
 
         <!-- each child node -->
-        <div cdkDrag *ngFor="let child of node.children" [cdkDragData]="child.id" (cdkDragMoved)="dragMoved($event)">
+        <div cdkDrag *ngFor="let child of node.children" [cdkDragData]="child.id" (cdkDragMoved)="this.moveItemSubject.next($event)">
 
           <div class="d-flex flex-row">
             <div style="width: 20px; height: 27px; border-bottom: 2px solid;"></div>
@@ -65,6 +74,6 @@
     </div>
 
 
-    <div [attr.id]="node.id + '-Under'" class="drop-line"></div>
+    <div [attr.id]="node.id + '-Under'" class="placement drop-line"></div>
   </div>
 </ng-template>
