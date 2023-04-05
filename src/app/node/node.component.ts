@@ -13,22 +13,27 @@ import {debounceTime, Subject, Subscription} from "rxjs";
   styleUrls: ['./node.component.css']
 })
 export class NodeComponent {
-  rootID = "root";
-  nodes: NodeData[] = [];
+  rootNode: NodeData = new NodeData("");
   nodeLookup: Map<string, NodeData> = new Map();
   dropData: DropData = new DropData("");
 
   moveItemSubject = new Subject<CdkDragMove<string>>();
   subscription?: Subscription;
 
-  orderedNodeIDs: string[] = [];
-  selectedID?: string;
+  hoveredNode?: NodeData;
+
+  orderedNodes: NodeData[] = [];
+  selectedNode?: NodeData;
+  disableDragging = false;
 
   @HostListener('document:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
     console.log(event.key);
-    if (event.key === "ArrowUp") this.onNodeSelection(this.selectedID, -1);
-    if (event.key === "ArrowDown") this.onNodeSelection(this.selectedID, +1);
+    if (!this.selectedNode) return;
+    if (event.key === "ArrowUp") this.onNodeSelection(this.selectedNode, -1);
+    if (event.key === "ArrowDown") this.onNodeSelection(this.selectedNode, +1);
+    if (event.key === "ArrowLeft") this.onChangeExpanded(this.selectedNode, false);
+    if (event.key === "ArrowRight") this.onChangeExpanded(this.selectedNode, true);
   }
 
   constructor(@Inject(DOCUMENT) private document: Document) {
@@ -47,32 +52,26 @@ export class NodeComponent {
   load() {
     // find & load data or use default template
     const local = localStorage.getItem("key");
-    this.nodes = local ? JSON.parse(local!) : defaultData;
+    this.rootNode = local ? JSON.parse(local!) : defaultData;
     if (!local) this.saveChanges();
 
     // ready the data
-    // const lookup = this.populateNodeLookup(this.nodes!);
-    this.orderedNodeIDs = [];
-    const root = new NodeData("", this.nodes);
-    this.nodeLookup = new Map([[this.rootID, root], ...this.populateNodeLookup(this.nodes!)]);
-    // console.log(this.orderedNodeIDs);
-    // this.orderedNodeIDs = [ ...lookup.values() ].map(value => value[0]);
+    this.orderedNodes = [];
+    this.nodeLookup = new Map(this.populateNodeLookup([this.rootNode]));
 
     this.dropData = new DropData("");
 
-    const reselect = this.selectedID;
-    this.selectedID = undefined;
-    this.onNodeSelection(reselect);
+    this.forceSelectNode(this.selectedNode);
   }
 
   saveChanges() {
-    localStorage.setItem("key", JSON.stringify(this.nodes));
+    localStorage.setItem("key", JSON.stringify(this.rootNode));
     this.load();
   }
 
   populateNodeLookup(nodes: NodeData[], isExpanded = true): [string, NodeData][] {
     return nodes.flatMap(n => {
-      if (isExpanded) this.orderedNodeIDs.push(n.id);
+      if (isExpanded) this.orderedNodes.push(n);
       return [[n.id, n], ...this.populateNodeLookup(n.children, n.isExpanded)];
     });
   }
@@ -93,19 +92,18 @@ export class NodeComponent {
     if (yPos > dropRect.bottom - dropRect.height / 3) this.dropData.placement = Placement.Under;
 
     this.clearDropLines();
+    if (event.source.data === dropID) return;
     const derp = this.document.getElementById(dropID + '-' + Placement[this.dropData.placement]);
     derp?.style.setProperty("display", "flex");
   }
 
   drop(event: CdkDragDrop<NodeData[]>, drop: DropData) {
-    this.onNodeSelection(this.selectedID);
     this.clearDropLines();
-
-    this.dropData = new DropData("", Placement.None);
-    if (drop?.placement === Placement.None) return;
 
     // what do we move
     const movedItem = this.nodeLookup.get(event.item.data)!;
+    if (movedItem.id === drop.id) return;
+    if (drop?.placement === Placement.None) return;
 
     // from where do we remove it
     const prevListID = event.previousContainer.id;
@@ -114,25 +112,33 @@ export class NodeComponent {
     prevList.splice(prevListIndex, 1);
 
     // to where did we move it
-    const dropListID = this.searchTreeForParent(this.nodes, drop.id)!;
+    const dropListID = this.searchTreeForParent([this.rootNode], drop.id);
+    if (!dropListID) return;
     const dropList = this.nodeLookup.get(dropListID)!.children;
     const dropListIndex = dropList.findIndex(n => n.id === drop.id);
 
     // perform move
     if (drop.placement === Placement.Over) dropList.splice(dropListIndex, 0, movedItem);
     else if (drop.placement === Placement.Under) dropList.splice(dropListIndex + 1, 0, movedItem);
-    else if (drop.placement === Placement.Merge) this.nodeLookup.get(drop.id)!.children.push(movedItem);
+    else if (drop.placement === Placement.Merge) {
+      const mergedWith = this.nodeLookup.get(drop.id)!;
+      mergedWith.isExpanded = true;
+      mergedWith.children.push(movedItem);
+    }
 
+    this.forceSelectNode(this.nodeLookup.get(movedItem.id));
+
+    this.dropData = new DropData("", Placement.None);
     this.saveChanges();
   }
 
-  searchTreeForParent(nodeTree: NodeData[], searchID: string, parentId: string | null = null): string | null {
-    for (const node of nodeTree) {
-      if (node.id === searchID) return parentId ?? this.rootID;
+  searchTreeForParent(nodes: NodeData[], searchID: string, parentId?: string): string | undefined {
+    for (const node of nodes) {
+      if (node.id === searchID) return parentId ?? undefined;
       const childResult = this.searchTreeForParent(node.children, searchID, node.id);
       if (childResult) return childResult;
     }
-    return parentId === null ? this.rootID : null;
+    return undefined;
   }
 
   clearDropLines() {
@@ -140,8 +146,8 @@ export class NodeComponent {
     elements.forEach(e => (e as any).style.setProperty("display", "none"));
   }
 
-  onChangeExpanded(node: NodeData) {
-    node.isExpanded = !node.isExpanded;
+  onChangeExpanded(node: NodeData, forceValue?: boolean) {
+    node.isExpanded = forceValue ?? !node.isExpanded;
     this.saveChanges();
   }
 
@@ -149,12 +155,20 @@ export class NodeComponent {
     node.content.push(new DataContent(''));
   }
 
-  onSaveContent(node: NodeData, isNodeEmpty: boolean) {
+  onEditContent(node: NodeData, content: DataContent) {
+    this.disableDragging = content.isEditing = true;
+    this.forceSelectNode(node);
+  }
+
+  onSaveContent(node: NodeData, content: DataContent, isNodeEmpty: boolean) {
+    this.disableDragging = content.isEditing = false
+
     if (isNodeEmpty) {
-      const parentID = this.searchTreeForParent(this.nodes, node.id)!;
+      const parentID = this.searchTreeForParent([this.rootNode], node.id)!;
       const parentsChildren = this.nodeLookup.get(parentID)!.children;
       parentsChildren.splice(parentsChildren.findIndex(c => c === node), 1);
     }
+
     this.saveChanges();
   }
 
@@ -167,32 +181,44 @@ export class NodeComponent {
       return;
     }
 
-    const parentID = this.searchTreeForParent(this.nodes, node.id)!;
+    const parentID = this.searchTreeForParent([this.rootNode], node.id)!;
     const parentsChildren = this.nodeLookup.get(parentID)!.children;
     parentsChildren.splice(parentsChildren.findIndex(c => c === node), 1);
     this.saveChanges();
   }
 
-  onNodeSelection(nodeID?: string, mod: number = 0, event?: MouseEvent) {
-    if (event && (event?.target as Element).tagName === "IMG") return;
-
-    let nodeIndex = -1;
-    if (nodeID) {
-      nodeIndex = this.orderedNodeIDs.findIndex(nid => nid === nodeID) + mod;
-      if (nodeIndex < 0 || nodeIndex > this.orderedNodeIDs.length - 1) return;
+  onNodeSelection(nodeToSelect?: NodeData, mod: number = 0, event?: MouseEvent) {
+    if (event) {
+      const clickedDiv = (event?.target as Element).tagName === "DIV";
+      const rowIsSelectable = (event?.currentTarget as Element).classList.contains("selectable");
+      if (event && (!clickedDiv || !rowIsSelectable)) return;
     }
 
-    const oldElement = this.document.getElementById('content-' + this.selectedID);
+    let nodeIndex = -1;
+    if (nodeToSelect) {
+      nodeIndex = this.orderedNodes.findIndex(n => n.id === nodeToSelect.id) + mod;
+      if (nodeIndex < 0 || nodeIndex > this.orderedNodes.length - 1) return;
+    }
+
+    const oldElement = this.document.getElementById('content-' + this.selectedNode?.id);
     if (oldElement) oldElement.classList.remove("selected");
 
-    if (!this.selectedID || this.selectedID !== nodeID || mod) {
-      const selectedID = this.orderedNodeIDs[nodeIndex];
-      const selectedElement = this.document.getElementById('content-' + selectedID);
+    if (!this.selectedNode || this.selectedNode.id !== nodeToSelect?.id || mod) {
+      const actualNode = this.orderedNodes[nodeIndex];
+      const selectedElement = this.document.getElementById('content-' + actualNode.id);
 
       if (selectedElement) {
         selectedElement.classList.add("selected");
-        this.selectedID = selectedID;
+        this.selectedNode = actualNode;
       }
-    } else this.selectedID = undefined;
+    } else this.selectedNode = undefined;
+  }
+
+  forceSelectNode(node?: NodeData) {
+    if (node) {
+      const reselect = node;
+      this.selectedNode = undefined;
+      this.onNodeSelection(reselect);
+    }
   }
 }

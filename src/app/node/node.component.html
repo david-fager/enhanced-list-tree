@@ -1,12 +1,4 @@
-<!-- initial nodes -->
-<div cdkDropList [id]="rootID" [cdkDropListData]="nodes"
-     (cdkDropListDropped)="drop($event, dropData)" [cdkDropListSortingDisabled]="true">
-
-  <div cdkDrag *ngFor="let node of nodes" [cdkDragData]="node.id" (cdkDragMoved)="this.moveItemSubject.next($event)">
-    <ng-container *ngTemplateOutlet="nodeTemp; context:{node:node}"></ng-container>
-  </div>
-</div>
-
+<ng-container *ngTemplateOutlet="nodeTemp; context:{node:rootNode}"></ng-container>
 
 <!-- template for all nodes -->
 <ng-template #nodeTemp let-node="node" let-itemClass>
@@ -15,8 +7,10 @@
 
 
     <!-- content of the node -->
-    <div [attr.id]="'content-' + node.id" class="d-flex flex-row align-items-center" [style.min-height]="'48px'"
-         [style.padding-left]="'5px'" (click)="onNodeSelection(node.id, 0, $event)">
+    <div [attr.id]="'content-' + node.id" class="selectable d-flex flex-row align-items-center hoverable"
+         [class.selected]="this.selectedNode === node" [style.min-height]="'48px'" [style.padding-left]="'5px'"
+         (click)="onNodeSelection(node, 0, $event)"
+         (mouseenter)="hoveredNode = node" (mouseleave)="hoveredNode = undefined">
 
       <!-- along with '-Over' and '-Under', this shows where a moved item might be placed -->
       <div *ngIf="!node.children.length" [attr.id]="node.id + '-Merge'" class="placement flex-column">
@@ -28,18 +22,31 @@
       </div>
 
       <div *ngIf="node.children.length" [style.padding-right]="'5px'">
-        <img *ngIf="!node.isExpanded" class="icon-32" src="assets/up-less.png" (click)="onChangeExpanded(node)">
-        <img *ngIf="node.isExpanded" class="icon-32" src="assets/down-more.png" (click)="onChangeExpanded(node)">
+        <img *ngIf="!node.isExpanded" class="icon-32" src="assets/up-less.png" (click)="onChangeExpanded(node)" alt="">
+        <img *ngIf="node.isExpanded" class="icon-32" src="assets/down-more.png" (click)="onChangeExpanded(node)" alt="">
       </div>
 
-      <div *ngFor="let content of node.content; let first = first" class="d-flex flex-row align-items-center" [style.min-width]="'180px'" [style.padding-left]="'5px'">
-        <span *ngIf="!$any(content).isEditing" [style.padding-bottom]="'3px'" [style.padding-right]="'5px'" (click)="$any(content).isEditing = true">{{$any(content).text}}</span>
-        <img *ngIf="!$any(content).isEditing && first" class="icon-24" src="assets/delete.png" (click)="onDeleteNode(node)">
+      <div *ngFor="let content of node.content; let first = first"
+           class="d-flex flex-row align-items-center" [style.min-width]="'180px'" [style.padding-left]="'5px'">
 
-        <app-input *ngIf="$any(content).isEditing" [node]="node" [content]="$any(content)" (onSave)="onSaveContent(node, $event)"></app-input>
+        <span *ngIf="!$any(content).isEditing"
+              [style.padding-bottom]="'4px'"
+              (click)="onEditContent(node, $any(content))">
+          {{$any(content).text}}
+        </span>
+
+        <app-input *ngIf="$any(content).isEditing"
+                   [node]="node"
+                   [content]="$any(content)"
+                   (onClose)="disableDragging = $any(content).isEditing = false"
+                   (onSave)="onSaveContent(node, $any(content), $event)">
+        </app-input>
       </div>
 
-      <img *ngIf="node.content.length < 5" class="icon-24" src="assets/add.png" (click)="onAddContent(node)">
+      <div *ngIf="hoveredNode === node">
+        <img class="icon-24" src="assets/add.png" (click)="onAddContent(node)" alt="">
+        <img class="icon-24 danger" src="assets/delete.png" (click)="onDeleteNode(node)" alt="">
+      </div>
     </div>
 
 
@@ -55,7 +62,8 @@
            (cdkDropListDropped)="drop($event, dropData)" [cdkDropListSortingDisabled]="true">
 
         <!-- each child node -->
-        <div cdkDrag *ngFor="let child of node.children" [cdkDragData]="child.id" (cdkDragMoved)="this.moveItemSubject.next($event)">
+        <div cdkDrag *ngFor="let child of node.children" [cdkDragDisabled]="disableDragging"
+             [cdkDragData]="child.id" (cdkDragMoved)="this.moveItemSubject.next($event)">
 
           <div class="d-flex flex-row">
             <div style="width: 20px; height: 27px; border-bottom: 2px solid;"></div>
@@ -67,7 +75,12 @@
         <!-- add buttons at end of branch -->
         <div class="d-flex flex-row" [style.min-height]="'32px'">
           <div style="width: 10px; height: 17px; border-bottom: 2px solid;"></div>
-          <img class="icon-24 align-self-center" src="assets/add.png" [style.margin-left]="'5px'" (click)="onAddNode(node)">
+
+          <img class="icon-24 align-self-center"
+               src="assets/add.png"
+               [style.margin-left]="'5px'"
+               (click)="onAddNode(node)"
+               alt="">
         </div>
 
       </div>

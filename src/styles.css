@@ -1,8 +1,8 @@
 /* You can add global styles to this file, and also import other style files */
 .icon-24 {
-  width: 20px;
-  height: 20px;
-  padding: 2px;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
 }
 
 .icon-24:hover {
@@ -17,9 +17,9 @@
 
 
 .icon-32 {
-  width: 28px;
-  height: 28px;
-  padding: 2px;
+  width: 32px;
+  height: 32px;
+  padding: 4px;
 }
 
 .icon-32:hover {
@@ -34,4 +34,8 @@
 
 .pr-2 {
   padding-left: 25px;
+}
+
+.danger:hover {
+  background-color: rgba(255, 65, 65, 0.3);
 }

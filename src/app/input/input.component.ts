@@ -19,6 +19,9 @@ export class InputComponent {
   @Output()
   onSave = new EventEmitter<boolean>();
 
+  @Output()
+  onClose = new EventEmitter();
+
   @ViewChild('field') field!: ElementRef;
 
   ngOnInit() {
@@ -31,8 +34,6 @@ export class InputComponent {
   }
 
   onCloseInput(cancelled: boolean) {
-    this.content!.isEditing = false;
-
     if (!cancelled) {
       this.content.text = this.text;
       if (!this.content.text) cancelled = true;
@@ -43,5 +44,7 @@ export class InputComponent {
       this.node.content.splice(this.node.content.findIndex(c => c === this.content), 1);
       this.onSave.emit(this.node.content.length === 0);
     }
+
+    this.onClose.emit();
   }
 }
