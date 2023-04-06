@@ -1,5 +1,5 @@
-import {Component, ElementRef, EventEmitter, Input, Output, ViewChild} from '@angular/core';
-import {DataContent, NodeData} from "../data/node-data";
+import {Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild} from '@angular/core';
+import {Key} from "../data/enums";
 
 @Component({
   selector: 'app-input',
@@ -8,24 +8,19 @@ import {DataContent, NodeData} from "../data/node-data";
 })
 export class InputComponent {
 
-  text!: string;
+  keys = Key;
+  value!: string;
 
   @Input()
-  node!: NodeData;
-
-  @Input()
-  content!: DataContent;
+  content!: string;
 
   @Output()
-  onSave = new EventEmitter<boolean>();
-
-  @Output()
-  onClose = new EventEmitter();
+  onClose = new EventEmitter<{ value: string, action: Key, shift: boolean }>();
 
   @ViewChild('field') field!: ElementRef;
 
   ngOnInit() {
-    this.text = this.content.text;
+    this.value = this.content;
   }
 
   async ngAfterViewInit() {
@@ -33,18 +28,23 @@ export class InputComponent {
     setTimeout(() => this.field.nativeElement.select(), 1);
   }
 
-  onCloseInput(cancelled: boolean) {
-    if (!cancelled) {
-      this.content.text = this.text;
-      if (!this.content.text) cancelled = true;
-      else this.onSave.emit();
-    }
+  onInputClose(action: Key, shift = false) {
+    this.onClose.emit({ value: this.value, action: action, shift: shift });
+  }
 
-    if (cancelled && !this.content.text) {
-      this.node.content.splice(this.node.content.findIndex(c => c === this.content), 1);
-      this.onSave.emit(this.node.content.length === 0);
+  @HostListener('document:keydown', ['$event'])
+  handleKeyboardEvent(event: KeyboardEvent) {
+    if (event.key === Key.Tab) {
+      event.preventDefault();
+      this.onInputClose(Key.Tab, event.shiftKey);
     }
-
-    this.onClose.emit();
+    if (event.key === Key.Enter) {
+      event.preventDefault();
+      this.onInputClose(Key.Enter);
+    }
+    if (event.key === Key.Escape) {
+      event.preventDefault();
+      this.onInputClose(Key.Escape);
+    }
   }
 }

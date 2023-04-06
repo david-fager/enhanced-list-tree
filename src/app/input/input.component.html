@@ -1,3 +1,3 @@
-<form (submit)="onCloseInput(false)">
-  <input #field type="text" name="text" [(ngModel)]="text" (focusout)="onCloseInput(true)">
+<form (submit)="onInputClose(keys.Enter)">
+  <input #field type="text" name="vtn" [(ngModel)]="value" (focusout)="onInputClose(keys.Escape)">
 </form>

@@ -2,10 +2,11 @@ import {Component, HostListener, Inject} from "@angular/core";
 import {DOCUMENT} from "@angular/common";
 import {CdkDragDrop, CdkDragMove} from "@angular/cdk/drag-drop";
 import * as uuid from 'uuid';
-import {DataContent, NodeData} from "../data/node-data";
+import {NodeData} from "../data/node-data";
 import {DropData, Placement} from "../data/drop-data";
 import {defaultData} from "../data/default-data";
-import {debounceTime, Subject, Subscription} from "rxjs";
+import {debounceTime, Subject, Subscription, timeout} from "rxjs";
+import {Key} from "../data/enums";
 
 @Component({
   selector: 'app-node',
@@ -24,16 +25,29 @@ export class NodeComponent {
 
   orderedNodes: NodeData[] = [];
   selectedNode?: NodeData;
-  disableDragging = false;
+  editingIndex?: number;
 
   @HostListener('document:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
     console.log(event.key);
-    if (!this.selectedNode) return;
-    if (event.key === "ArrowUp") this.onNodeSelection(this.selectedNode, -1);
-    if (event.key === "ArrowDown") this.onNodeSelection(this.selectedNode, +1);
-    if (event.key === "ArrowLeft") this.onChangeExpanded(this.selectedNode, false);
-    if (event.key === "ArrowRight") this.onChangeExpanded(this.selectedNode, true);
+
+    if (!this.selectedNode) {
+      if (event.key === Key.Tab) {
+        event.preventDefault();
+        this.forceSelectNode(this.rootNode);
+      }
+      return;
+    }
+
+    if (this.editingIndex !== undefined) return;
+    if (event.key === Key.ArrowUp) this.onNodeSelection(this.selectedNode, -1);
+    if (event.key === Key.ArrowDown) this.onNodeSelection(this.selectedNode, +1);
+    if (event.key === Key.ArrowLeft) this.onChangeExpanded(this.selectedNode, false);
+    if (event.key === Key.ArrowRight) this.onChangeExpanded(this.selectedNode, true);
+    if (event.key === Key.Enter) {
+      event.preventDefault();
+      this.onEditContent(this.selectedNode, 0);
+    }
   }
 
   constructor(@Inject(DOCUMENT) private document: Document) {
@@ -52,7 +66,8 @@ export class NodeComponent {
   load() {
     // find & load data or use default template
     const local = localStorage.getItem("key");
-    this.rootNode = local ? JSON.parse(local!) : defaultData;
+    this.rootNode = local ? JSON.parse(local) : defaultData;
+
     if (!local) this.saveChanges();
 
     // ready the data
@@ -152,28 +167,56 @@ export class NodeComponent {
   }
 
   onAddContent(node: NodeData) {
-    node.content.push(new DataContent(''));
+    node.content.push("");
+    this.selectedNode = node;
+    this.editingIndex = node.content.length - 1;
   }
 
-  onEditContent(node: NodeData, content: DataContent) {
-    this.disableDragging = content.isEditing = true;
+  onEditContent(node: NodeData, index: number) {
     this.forceSelectNode(node);
+    this.editingIndex = index;
   }
 
-  onSaveContent(node: NodeData, content: DataContent, isNodeEmpty: boolean) {
-    this.disableDragging = content.isEditing = false
+  onSaveContent(node: NodeData, contentIndex: number, event: { value: string, action: Key, shift: boolean }) {
+    this.editingIndex = undefined;
 
-    if (isNodeEmpty) {
+    if (event.action === Key.Enter || event.action == Key.Tab) {
+      node.content[contentIndex] = event.value;
+    }
+
+    if (!node.content[contentIndex]) {
+      node.content.splice(contentIndex, 1);
+    }
+
+    if (!node.content.length) {
       const parentID = this.searchTreeForParent([this.rootNode], node.id)!;
       const parentsChildren = this.nodeLookup.get(parentID)!.children;
       parentsChildren.splice(parentsChildren.findIndex(c => c === node), 1);
     }
 
+    if (event.action === Key.Tab && node.content) {
+      if (!event.shift && node.content[contentIndex]) contentIndex++;
+      if (event.shift) contentIndex--;
+      if (contentIndex < 0) return;
+      this.editingIndex = contentIndex;
+      if (contentIndex >= node.content.length) this.onAddContent(node);
+    }
+
     this.saveChanges();
+
+    if (event.action === Key.Enter) {
+      const parentID = this.searchTreeForParent([this.rootNode], node.id)!;
+      const parentNode = this.nodeLookup.get(parentID)!;
+      const nodeIndex = parentNode.children.findIndex(child => child.id === node.id);
+      if (nodeIndex + 1 < parentNode.children.length) this.onEditContent(parentNode.children[nodeIndex + 1], 0);
+      else this.onAddNode(parentNode);
+    }
   }
 
   onAddNode(node: NodeData) {
-    node.children.push(new NodeData(uuid.v4()))
+    const created = new NodeData(uuid.v4());
+    node.children.push(created)
+    this.onAddContent(created);
   }
 
   onDeleteNode(node: NodeData) {

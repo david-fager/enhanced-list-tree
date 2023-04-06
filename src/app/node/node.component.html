@@ -26,20 +26,17 @@
         <img *ngIf="node.isExpanded" class="icon-32" src="assets/down-more.png" (click)="onChangeExpanded(node)" alt="">
       </div>
 
-      <div *ngFor="let content of node.content; let first = first"
+      <div *ngFor="let content of node.content; let idx = index"
            class="d-flex flex-row align-items-center" [style.min-width]="'180px'" [style.padding-left]="'5px'">
-
-        <span *ngIf="!$any(content).isEditing"
+        <span *ngIf="!(selectedNode?.id === node.id && editingIndex === idx)"
               [style.padding-bottom]="'4px'"
-              (click)="onEditContent(node, $any(content))">
-          {{$any(content).text}}
+              (click)="onEditContent(node, idx)">
+          {{content}}
         </span>
 
-        <app-input *ngIf="$any(content).isEditing"
-                   [node]="node"
-                   [content]="$any(content)"
-                   (onClose)="disableDragging = $any(content).isEditing = false"
-                   (onSave)="onSaveContent(node, $any(content), $event)">
+        <app-input *ngIf="(selectedNode?.id === node.id && editingIndex === idx)"
+                   [content]="content"
+                   (onClose)="onSaveContent(node, idx, $event)">
         </app-input>
       </div>
 
@@ -62,7 +59,7 @@
            (cdkDropListDropped)="drop($event, dropData)" [cdkDropListSortingDisabled]="true">
 
         <!-- each child node -->
-        <div cdkDrag *ngFor="let child of node.children" [cdkDragDisabled]="disableDragging"
+        <div cdkDrag *ngFor="let child of node.children" [cdkDragDisabled]="editingIndex !== undefined"
              [cdkDragData]="child.id" (cdkDragMoved)="this.moveItemSubject.next($event)">
 
           <div class="d-flex flex-row">
