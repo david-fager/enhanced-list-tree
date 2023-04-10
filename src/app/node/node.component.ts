@@ -5,7 +5,7 @@ import * as uuid from 'uuid';
 import {NodeData} from "../data/node-data";
 import {DropData, Placement} from "../data/drop-data";
 import {defaultData} from "../data/default-data";
-import {debounceTime, Subject, Subscription, timeout} from "rxjs";
+import {debounceTime, Subject, Subscription} from "rxjs";
 import {Key} from "../data/enums";
 
 @Component({
@@ -14,48 +14,48 @@ import {Key} from "../data/enums";
   styleUrls: ['./node.component.css']
 })
 export class NodeComponent {
-  rootNode: NodeData = new NodeData("");
-  nodeLookup: Map<string, NodeData> = new Map();
-  dropData: DropData = new DropData("");
-
-  moveItemSubject = new Subject<CdkDragMove<string>>();
-  subscription?: Subscription;
+  nodeTreeRoot: NodeData = new NodeData("");
+  shownNodes: NodeData[] = [];
 
   hoveredNode?: NodeData;
-
-  orderedNodes: NodeData[] = [];
   selectedNode?: NodeData;
   editingIndex?: number;
 
+  dropData: DropData = new DropData("");
+
+  moveItemBounce = new Subject<CdkDragMove<string>>();
+  subscription?: Subscription;
+
+
   @HostListener('document:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
-    console.log(event.key);
+    if (event.key === Key.Tab) event.preventDefault();
 
-    if (!this.selectedNode) {
-      if (event.key === Key.Tab) {
-        event.preventDefault();
-        this.forceSelectNode(this.rootNode);
-      }
-      return;
-    }
-
-    if (this.editingIndex !== undefined) return;
-    if (event.key === Key.ArrowUp) this.onNodeSelection(this.selectedNode, -1);
-    if (event.key === Key.ArrowDown) this.onNodeSelection(this.selectedNode, +1);
+    if (!this.selectedNode || this.editingIndex !== undefined) return;
+    if (event.key === Key.ArrowUp) this.onSelectNode(this.selectedNode, -1);
+    if (event.key === Key.ArrowDown) this.onSelectNode(this.selectedNode, +1);
     if (event.key === Key.ArrowLeft) this.onChangeExpanded(this.selectedNode, false);
     if (event.key === Key.ArrowRight) this.onChangeExpanded(this.selectedNode, true);
+
     if (event.key === Key.Enter) {
       event.preventDefault();
       this.onEditContent(this.selectedNode, 0);
     }
+
+    if (event.key === Key.Escape) this.selectedNode = undefined;
   }
 
+
   constructor(@Inject(DOCUMENT) private document: Document) {
-    this.load();
+    const local = localStorage.getItem("key");
+    this.nodeTreeRoot = local ? JSON.parse(local) : defaultData;
+    if (!local) this.saveChanges();
+
+    this.updateShownNodesList();
   }
 
   ngOnInit() {
-    this.moveItemSubject.pipe(debounceTime(10))
+    this.subscription = this.moveItemBounce.pipe(debounceTime(10))
       .subscribe((value: CdkDragMove<string>) => this.dragMoved(value));
   }
 
@@ -63,32 +63,122 @@ export class NodeComponent {
     this.subscription?.unsubscribe();
   }
 
-  load() {
-    // find & load data or use default template
-    const local = localStorage.getItem("key");
-    this.rootNode = local ? JSON.parse(local) : defaultData;
 
-    if (!local) this.saveChanges();
-
-    // ready the data
-    this.orderedNodes = [];
-    this.nodeLookup = new Map(this.populateNodeLookup([this.rootNode]));
-
-    this.dropData = new DropData("");
-
-    this.forceSelectNode(this.selectedNode);
+  saveChanges(skipUpdate = false) {
+    localStorage.setItem("key", JSON.stringify(this.nodeTreeRoot));
+    if (!skipUpdate) this.updateShownNodesList();
   }
 
-  saveChanges() {
-    localStorage.setItem("key", JSON.stringify(this.rootNode));
-    this.load();
+  updateShownNodesList() {
+    this.shownNodes = this.flattenNodeTree([this.nodeTreeRoot]);
   }
 
-  populateNodeLookup(nodes: NodeData[], isExpanded = true): [string, NodeData][] {
-    return nodes.flatMap(n => {
-      if (isExpanded) this.orderedNodes.push(n);
-      return [[n.id, n], ...this.populateNodeLookup(n.children, n.isExpanded)];
-    });
+  flattenNodeTree(nodes: NodeData[]): NodeData[] {
+    return nodes.flatMap(n => n.isExpanded ? [n, ...this.flattenNodeTree(n.children)] : [n]);
+  }
+
+
+  onChangeExpanded(node: NodeData, forceValue?: boolean) {
+    node.isExpanded = forceValue ?? !node.isExpanded;
+    this.updateShownNodesList();
+  }
+
+  onAddNode(parentNode: NodeData) {
+    const created = new NodeData(uuid.v4());
+    parentNode.children.push(created);
+    this.updateShownNodesList();
+    this.onEditContent(created);
+  }
+
+  onEditContent(node: NodeData, index: number | undefined = undefined) {
+    this.selectedNode = node;
+    if (index === undefined || index >= node.content.length) node.content.push("");
+    this.editingIndex = index ?? node.content.length - 1;
+  }
+
+  onSaveContent(node: NodeData, contentIndex: number, event: { value: string, action: Key, shift: boolean }) {
+    this.editingIndex = undefined;
+
+    const parentID = this.searchTreeForParent([this.nodeTreeRoot], node.id, node.id)!;
+    const parentNode = this.shownNodes.find(n => n.id === parentID)!
+    const siblings = parentNode.children;
+    const isLastOfSiblings = siblings.findIndex(s => s.id === node.id) >= siblings.length - 1;
+
+    if (event.action === Key.Enter || event.action === Key.Tab) node.content[contentIndex] = event.value;
+    if (!node.content[contentIndex]) node.content.splice(contentIndex, 1);
+    if (!node.content.length) this.onDeleteNode(node, true);
+
+    this.saveChanges(true);
+
+    setTimeout(() => {
+      if (event.action === Key.Tab && !event.shift) {
+        // if there was content added then just go to next content 'column'
+        if (node.content[contentIndex]) this.onEditContent(node, contentIndex + 1);
+        else {
+          this.editingIndex = 0;
+          if (isLastOfSiblings) this.onAddNode(parentNode);
+          else this.onSelectNode(node, +1);
+        }
+      }
+      if (event.action === Key.Tab && event.shift) {
+        if (contentIndex <= 0) {
+          const prevNodeIndex = this.shownNodes.findIndex(n => n.id === node.id) - 1;
+          if (prevNodeIndex > 0) this.onEditContent(this.shownNodes[prevNodeIndex]);
+        } else this.onEditContent(node, contentIndex - 1);
+      }
+      if (event.action === Key.Enter || event.action === Key.Escape) {
+        if (!node.content[contentIndex] && !node.content.length) {
+          this.editingIndex = undefined;
+          this.onSelectNode(node, -1);
+        } else {
+          this.editingIndex = 0;
+          if (isLastOfSiblings) this.onAddNode(parentNode);
+          else this.onSelectNode(node, +1);
+        }
+      }
+      this.updateShownNodesList();
+    }, 1);
+  }
+
+  onSelectNode(node: NodeData, mod: number = 0, event?: MouseEvent) {
+    if (event) {
+      const clickedDiv = (event?.target as Element).tagName === "DIV";
+      const rowIsSelectable = (event?.currentTarget as Element).classList.contains("selectable");
+      if (event && (!clickedDiv || !rowIsSelectable)) return;
+    }
+
+    const index = this.shownNodes.findIndex(n => n.id === node.id) + mod;
+    if (0 > index || index > this.shownNodes.length - 1) return;
+
+    const selectNode = this.shownNodes[index];
+    this.selectedNode = this.selectedNode?.id !== selectNode.id ? selectNode : undefined;
+  }
+
+  onDeleteNode(node: NodeData, shadowDelete = false) {
+    if (!shadowDelete && !confirm('Are you sure you want to delete this branch?')) {
+      return;
+    }
+
+    const parentID = this.searchTreeForParent([this.nodeTreeRoot], node.id)!;
+    const parentsChildren = this.shownNodes.find(n => n.id === parentID)!.children;
+    parentsChildren.splice(parentsChildren.findIndex(c => c === node), 1);
+
+    if (!shadowDelete) this.saveChanges();
+  }
+
+
+  searchTreeForParent(nodes: NodeData[], searchID: string, parentId?: string): string | undefined {
+    for (const node of nodes) {
+      if (node.id === searchID) return parentId ?? undefined;
+      const childResult = this.searchTreeForParent(node.children, searchID, node.id);
+      if (childResult) return childResult;
+    }
+    return undefined;
+  }
+
+  clearDropLines() {
+    const elements = this.document.querySelectorAll(".placement");
+    elements.forEach(e => (e as any).style.setProperty("display", "none"));
   }
 
   dragMoved(event: CdkDragMove<string>) {
@@ -116,152 +206,36 @@ export class NodeComponent {
     this.clearDropLines();
 
     // what do we move
-    const movedItem = this.nodeLookup.get(event.item.data)!;
+    // const movedItem = this.nodeLookup.get(event.item.data)!;
+    const movedItem = this.shownNodes.find(n => n.id === event.item.data)!;
     if (movedItem.id === drop.id) return;
     if (drop?.placement === Placement.None) return;
 
     // from where do we remove it
     const prevListID = event.previousContainer.id;
-    const prevList = this.nodeLookup.get(prevListID)!.children;
+    // const prevList = this.nodeLookup.get(prevListID)!.children;
+    const prevList = this.shownNodes.find(n => n.id === prevListID)!.children;
     const prevListIndex = prevList.findIndex(n => n.id === movedItem.id);
     prevList.splice(prevListIndex, 1);
 
     // to where did we move it
-    const dropListID = this.searchTreeForParent([this.rootNode], drop.id);
+    const dropListID = this.searchTreeForParent([this.nodeTreeRoot], drop.id);
     if (!dropListID) return;
-    const dropList = this.nodeLookup.get(dropListID)!.children;
+    const dropList = this.shownNodes.find(n => n.id === dropListID)!.children;
     const dropListIndex = dropList.findIndex(n => n.id === drop.id);
 
     // perform move
     if (drop.placement === Placement.Over) dropList.splice(dropListIndex, 0, movedItem);
     else if (drop.placement === Placement.Under) dropList.splice(dropListIndex + 1, 0, movedItem);
     else if (drop.placement === Placement.Merge) {
-      const mergedWith = this.nodeLookup.get(drop.id)!;
+      const mergedWith = this.shownNodes.find(n => n.id === drop.id)!;
       mergedWith.isExpanded = true;
       mergedWith.children.push(movedItem);
     }
 
-    this.forceSelectNode(this.nodeLookup.get(movedItem.id));
-
     this.dropData = new DropData("", Placement.None);
-    this.saveChanges();
-  }
-
-  searchTreeForParent(nodes: NodeData[], searchID: string, parentId?: string): string | undefined {
-    for (const node of nodes) {
-      if (node.id === searchID) return parentId ?? undefined;
-      const childResult = this.searchTreeForParent(node.children, searchID, node.id);
-      if (childResult) return childResult;
-    }
-    return undefined;
-  }
-
-  clearDropLines() {
-    const elements = this.document.querySelectorAll(".placement");
-    elements.forEach(e => (e as any).style.setProperty("display", "none"));
-  }
-
-  onChangeExpanded(node: NodeData, forceValue?: boolean) {
-    node.isExpanded = forceValue ?? !node.isExpanded;
-    this.saveChanges();
-  }
-
-  onAddContent(node: NodeData) {
-    node.content.push("");
-    this.selectedNode = node;
-    this.editingIndex = node.content.length - 1;
-  }
-
-  onEditContent(node: NodeData, index: number) {
-    this.forceSelectNode(node);
-    this.editingIndex = index;
-  }
-
-  onSaveContent(node: NodeData, contentIndex: number, event: { value: string, action: Key, shift: boolean }) {
-    this.editingIndex = undefined;
-
-    if (event.action === Key.Enter || event.action == Key.Tab) {
-      node.content[contentIndex] = event.value;
-    }
-
-    if (!node.content[contentIndex]) {
-      node.content.splice(contentIndex, 1);
-    }
-
-    if (!node.content.length) {
-      const parentID = this.searchTreeForParent([this.rootNode], node.id)!;
-      const parentsChildren = this.nodeLookup.get(parentID)!.children;
-      parentsChildren.splice(parentsChildren.findIndex(c => c === node), 1);
-    }
-
-    if (event.action === Key.Tab && node.content) {
-      if (!event.shift && node.content[contentIndex]) contentIndex++;
-      if (event.shift) contentIndex--;
-      if (contentIndex < 0) return;
-      this.editingIndex = contentIndex;
-      if (contentIndex >= node.content.length) this.onAddContent(node);
-    }
+    this.selectedNode = this.shownNodes.find(n => n.id === movedItem.id);
 
     this.saveChanges();
-
-    if (event.action === Key.Enter) {
-      const parentID = this.searchTreeForParent([this.rootNode], node.id)!;
-      const parentNode = this.nodeLookup.get(parentID)!;
-      const nodeIndex = parentNode.children.findIndex(child => child.id === node.id);
-      if (nodeIndex + 1 < parentNode.children.length) this.onEditContent(parentNode.children[nodeIndex + 1], 0);
-      else this.onAddNode(parentNode);
-    }
-  }
-
-  onAddNode(node: NodeData) {
-    const created = new NodeData(uuid.v4());
-    node.children.push(created)
-    this.onAddContent(created);
-  }
-
-  onDeleteNode(node: NodeData) {
-    if (!confirm('Are you sure you want to delete this branch?')) {
-      return;
-    }
-
-    const parentID = this.searchTreeForParent([this.rootNode], node.id)!;
-    const parentsChildren = this.nodeLookup.get(parentID)!.children;
-    parentsChildren.splice(parentsChildren.findIndex(c => c === node), 1);
-    this.saveChanges();
-  }
-
-  onNodeSelection(nodeToSelect?: NodeData, mod: number = 0, event?: MouseEvent) {
-    if (event) {
-      const clickedDiv = (event?.target as Element).tagName === "DIV";
-      const rowIsSelectable = (event?.currentTarget as Element).classList.contains("selectable");
-      if (event && (!clickedDiv || !rowIsSelectable)) return;
-    }
-
-    let nodeIndex = -1;
-    if (nodeToSelect) {
-      nodeIndex = this.orderedNodes.findIndex(n => n.id === nodeToSelect.id) + mod;
-      if (nodeIndex < 0 || nodeIndex > this.orderedNodes.length - 1) return;
-    }
-
-    const oldElement = this.document.getElementById('content-' + this.selectedNode?.id);
-    if (oldElement) oldElement.classList.remove("selected");
-
-    if (!this.selectedNode || this.selectedNode.id !== nodeToSelect?.id || mod) {
-      const actualNode = this.orderedNodes[nodeIndex];
-      const selectedElement = this.document.getElementById('content-' + actualNode.id);
-
-      if (selectedElement) {
-        selectedElement.classList.add("selected");
-        this.selectedNode = actualNode;
-      }
-    } else this.selectedNode = undefined;
-  }
-
-  forceSelectNode(node?: NodeData) {
-    if (node) {
-      const reselect = node;
-      this.selectedNode = undefined;
-      this.onNodeSelection(reselect);
-    }
   }
 }

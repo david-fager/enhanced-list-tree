@@ -1,4 +1,4 @@
-<ng-container *ngTemplateOutlet="nodeTemp; context:{node:rootNode}"></ng-container>
+<ng-container *ngTemplateOutlet="nodeTemp; context:{node:nodeTreeRoot}"></ng-container>
 
 <!-- template for all nodes -->
 <ng-template #nodeTemp let-node="node" let-itemClass>
@@ -7,9 +7,8 @@
 
 
     <!-- content of the node -->
-    <div [attr.id]="'content-' + node.id" class="selectable d-flex flex-row align-items-center hoverable"
-         [class.selected]="this.selectedNode === node" [style.min-height]="'48px'" [style.padding-left]="'5px'"
-         (click)="onNodeSelection(node, 0, $event)"
+    <div class="selectable d-flex flex-row align-items-center hoverable" [class.selected]="this.selectedNode === node"
+         [style.min-height]="'48px'" [style.padding-left]="'5px'" (click)="onSelectNode(node, 0, $event)"
          (mouseenter)="hoveredNode = node" (mouseleave)="hoveredNode = undefined">
 
       <!-- along with '-Over' and '-Under', this shows where a moved item might be placed -->
@@ -41,7 +40,7 @@
       </div>
 
       <div *ngIf="hoveredNode === node">
-        <img class="icon-24" src="assets/add.png" (click)="onAddContent(node)" alt="">
+        <img class="icon-24" src="assets/add.png" (click)="onEditContent(node)" alt="">
         <img class="icon-24 danger" src="assets/delete.png" (click)="onDeleteNode(node)" alt="">
       </div>
     </div>
@@ -60,7 +59,7 @@
 
         <!-- each child node -->
         <div cdkDrag *ngFor="let child of node.children" [cdkDragDisabled]="editingIndex !== undefined"
-             [cdkDragData]="child.id" (cdkDragMoved)="this.moveItemSubject.next($event)">
+             [cdkDragData]="child.id" (cdkDragMoved)="this.moveItemBounce.next($event)">
 
           <div class="d-flex flex-row">
             <div style="width: 20px; height: 27px; border-bottom: 2px solid;"></div>

@@ -7,7 +7,6 @@ import {Key} from "../data/enums";
   styleUrls: ['./input.component.css']
 })
 export class InputComponent {
-
   keys = Key;
   value!: string;
 
