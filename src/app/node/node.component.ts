@@ -1,10 +1,9 @@
-import {Component, HostListener, Inject} from "@angular/core";
+import {Component, HostListener, Inject, Input} from "@angular/core";
 import {DOCUMENT} from "@angular/common";
 import {CdkDragDrop, CdkDragMove} from "@angular/cdk/drag-drop";
 import * as uuid from 'uuid';
 import {NodeData} from "../data/node-data";
 import {DropData, Placement} from "../data/drop-data";
-import {defaultData} from "../data/default-data";
 import {debounceTime, Subject, Subscription} from "rxjs";
 import {Key} from "../data/enums";
 
@@ -14,6 +13,9 @@ import {Key} from "../data/enums";
   styleUrls: ['./node.component.css']
 })
 export class NodeComponent {
+  @Input()
+  localKey?: string;
+
   nodeTreeRoot: NodeData = new NodeData("");
   shownNodes: NodeData[] = [];
 
@@ -47,16 +49,22 @@ export class NodeComponent {
 
 
   constructor(@Inject(DOCUMENT) private document: Document) {
-    const local = localStorage.getItem("key");
-    this.nodeTreeRoot = local ? JSON.parse(local) : defaultData;
-    if (!local) this.saveChanges();
-
-    this.updateShownNodesList();
   }
 
   ngOnInit() {
     this.subscription = this.moveItemBounce.pipe(debounceTime(10))
       .subscribe((value: CdkDragMove<string>) => this.dragMoved(value));
+
+    try {
+      const key = this.localKey!;
+      const storedRaw = localStorage.getItem(key)!;
+      const storedParsed = JSON.parse(storedRaw);
+      if (storedParsed) this.nodeTreeRoot = storedParsed;
+    } catch (e) {
+      this.nodeTreeRoot = new NodeData("");
+    }
+
+    this.updateShownNodesList();
   }
 
   ngOnDestory() {
@@ -65,7 +73,7 @@ export class NodeComponent {
 
 
   saveChanges(skipUpdate = false) {
-    localStorage.setItem("key", JSON.stringify(this.nodeTreeRoot));
+    localStorage.setItem(this.localKey!, JSON.stringify(this.nodeTreeRoot));
     if (!skipUpdate) this.updateShownNodesList();
   }
 
@@ -126,7 +134,7 @@ export class NodeComponent {
           if (prevNodeIndex > 0) this.onEditContent(this.shownNodes[prevNodeIndex]);
         } else this.onEditContent(node, contentIndex - 1);
       }
-      if (event.action === Key.Enter || event.action === Key.Escape) {
+      if (event.action === Key.Enter) {
         if (!node.content[contentIndex] && !node.content.length) {
           this.editingIndex = undefined;
           this.onSelectNode(node, -1);

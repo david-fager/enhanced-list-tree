@@ -1,4 +1,6 @@
-<ng-container *ngTemplateOutlet="nodeTemp; context:{node:nodeTreeRoot}"></ng-container>
+<div *ngIf="nodeTreeRoot && nodeTreeRoot.id">
+  <ng-container *ngTemplateOutlet="nodeTemp; context:{node:nodeTreeRoot}"></ng-container>
+</div>
 
 <!-- template for all nodes -->
 <ng-template #nodeTemp let-node="node" let-itemClass>

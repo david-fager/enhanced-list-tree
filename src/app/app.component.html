@@ -1,1 +1,10 @@
-<app-node></app-node>
+<div class="d-flex flex-row" [style.padding]="'10px'">
+  <div ngbDropdown container="body" [style.width]="'150px'">
+    <button ngbDropdownToggle type="button" class="btn btn-outline-primary w-100">{{selectedKey}}</button>
+    <div ngbDropdownMenu>
+      <button ngbDropdownItem *ngFor="let key of localKeys" (click)="selectedKey = key">{{key}}</button>
+    </div>
+  </div>
+</div>
+<div class="divider"></div>
+<app-node [localKey]="selectedKey"></app-node>
